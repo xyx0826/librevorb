@@ -1,6 +1,7 @@
 #ifndef REVORB_H
 
 #include <stdint.h>
+#include "exports.h"
 
 typedef struct REVORB_FILE_ {
   intptr_t* start;
@@ -23,6 +24,6 @@ typedef int REVORB_RESULT;
 #define REVORB_ERR_WRITE_FAIL 10
 #define REVORB_ERR_WRITE_FAIL2 11
 
-REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo);
+REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo);
 
 #endif

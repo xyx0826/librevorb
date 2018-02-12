@@ -168,7 +168,7 @@ REVORB_RESULT copy_headers(REVORB_FILE* fi,
   return REVORB_ERR_SUCCESS;
 }
 
-REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
+REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
   int g_failed;
 
   ogg_sync_state sync_in, sync_out;
