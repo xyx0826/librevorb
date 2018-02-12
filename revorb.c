@@ -283,6 +283,8 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
     g_failed = 1;
   }
 
+  vorbis_info_clear(&vi);
+
   ogg_sync_clear(&sync_in);
   ogg_sync_clear(&sync_out);
 
