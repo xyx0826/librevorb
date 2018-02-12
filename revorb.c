@@ -24,6 +24,8 @@
 /*# CFLAGS=/D_UNICODE #*/
 /*# LFLAGS=/NODEFAULTLIB:MSVCRT /LTCG /OPT:REF /MANIFEST:NO #*/
 
+#include "stdafx.h"
+
 #ifdef __APPLE__
 # include <sys/uio.h>
 #else
@@ -44,12 +46,12 @@ int revorb_fread(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
     return -1;
   }
   size_t sz = size * n;
-  int offset = (intptr_t)(fp->cursor) - (intptr_t)(fp->start);
+  int offset = (int)(fp->cursor) - (int)(fp->start);
   if (offset + sz > fp->size) {
     sz = fp->size - offset;
   }
   memcpy(buffer, fp->cursor, sz);
-  *(intptr_t*)(fp->cursor) += sz;
+  (int)fp->cursor += sz;
   return sz;
 }
 
@@ -62,11 +64,11 @@ int revorb_fwrite(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
   if (fp->size - offset < sz) {
     int delta = sz - (fp->size - offset);
     fp->size += delta + 1;
-    fp->start = (intptr_t*) realloc(fp->start, fp->size);
-    fp->cursor = (intptr_t*) (*(intptr_t*)(fp->start) + offset);
+    fp->start = (void*)realloc(fp->start, fp->size);
+    fp->cursor = (void*)((int)fp->start + offset);
   }
   memcpy(fp->cursor, buffer, sz);
-  *(intptr_t*)(fp->cursor) += sz;
+  (int)fp->cursor += sz;
   return sz;
 }
 void revorb_fclose(REVORB_FILE* fp) {
@@ -280,8 +282,6 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
   } else {
     g_failed = 1;
   }
-
-  vorbis_info_clear(&vi);
 
   ogg_sync_clear(&sync_in);
   ogg_sync_clear(&sync_out);

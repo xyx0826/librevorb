@@ -4,8 +4,8 @@
 #include "exports.h"
 
 typedef struct REVORB_FILE_ {
-  intptr_t* start;
-  intptr_t* cursor;
+  void* start;
+  void* cursor;
   int size;
 } REVORB_FILE;
 
