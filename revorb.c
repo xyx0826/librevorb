@@ -41,34 +41,34 @@
 
 #include "revorb.h"
 
-int revorb_fread(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
+size_t revorb_fread(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
   if (fp->size == -1) {
     return -1;
   }
   size_t sz = size * n;
-  int offset = (int)(fp->cursor) - (int)(fp->start);
+  intptr_t offset = (intptr_t)(fp->cursor) - (intptr_t)(fp->start);
   if (offset + sz > fp->size) {
     sz = fp->size - offset;
   }
   memcpy(buffer, fp->cursor, sz);
-  (int)fp->cursor += sz;
+  (intptr_t)fp->cursor += sz;
   return sz;
 }
 
-int revorb_fwrite(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
+size_t revorb_fwrite(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
   if (fp->size == -1) {
     return -1;
   }
   size_t sz = size * n;
-  int offset = (intptr_t)(fp->cursor) - (intptr_t)(fp->start);
+  intptr_t offset = (intptr_t)(fp->cursor) - (intptr_t)(fp->start);
   if (fp->size - offset < sz) {
-    int delta = sz - (fp->size - offset);
+      intptr_t delta = sz - (fp->size - offset);
     fp->size += delta + 1;
     fp->start = (void*)realloc(fp->start, fp->size);
-    fp->cursor = (void*)((int)fp->start + offset);
+    fp->cursor = (void*)((intptr_t)fp->start + offset);
   }
   memcpy(fp->cursor, buffer, sz);
-  (int)fp->cursor += sz;
+  (intptr_t)fp->cursor += sz;
   return sz;
 }
 void revorb_fclose(REVORB_FILE* fp) {
@@ -86,7 +86,7 @@ REVORB_RESULT copy_headers(REVORB_FILE* fi,
                            ogg_stream_state* os,
                            vorbis_info* vi) {
   char* buffer = ogg_sync_buffer(si, 4096);
-  int numread = revorb_fread(buffer, 1, 4096, fi);
+  size_t numread = revorb_fread(buffer, 1, 4096, fi);
   ogg_sync_wrote(si, numread);
 
   ogg_page page;
@@ -259,7 +259,7 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
       if (eos == 2)
         break;
 
-      {
+      { 
         packet.e_o_s = 1;
         ogg_stream_packetin(&stream_out, &packet);
         ogg_page opage;
