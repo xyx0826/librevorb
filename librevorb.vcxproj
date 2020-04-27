@@ -168,6 +168,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.c" />
+    <ClCompile Include="revorb-win.c" />
     <ClCompile Include="revorb.c" />
     <ClCompile Include="stdafx.c">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
