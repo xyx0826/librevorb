@@ -41,9 +41,6 @@
 
 #include "revorb.h"
 
-typedef void* (__stdcall* ReAllocHGlobal)(void*, size_t);
-
-ReAllocHGlobal netrealloc;
 
 size_t revorb_fread(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
 	if (fp->size == -1) {
@@ -66,18 +63,25 @@ size_t revorb_fwrite(void* buffer, size_t size, size_t n, REVORB_FILE* fp) {
 	size_t sz = size * n;
 	intptr_t offset = (intptr_t)(fp->cursor) - (intptr_t)(fp->start);
 	if (fp->size - offset < sz) {
-		intptr_t delta = sz - (fp->size - offset);
-		fp->size += delta + 1;
-		if (netrealloc) {
-			fp->start = netrealloc(fp->start, fp->size);
-		} else {
-			fp->start = (void*)realloc(fp->start, fp->size);
-		}
-		fp->cursor = (void*)((intptr_t)fp->start + offset);
+		return -1;
 	}
 	memcpy(fp->cursor, buffer, sz);
 	(intptr_t)fp->cursor += sz;
 	return sz;
+}
+
+size_t revorb_fwritepage(ogg_page page, REVORB_FILE* fp) {
+	if (fp->size == -1) {
+		return -1;
+	}
+	int pagesize = page.header_len + page.body_len;
+	int writesize = revorb_fwrite(page.header, 1, page.header_len, fp)
+		+ revorb_fwrite(page.body, 1, page.body_len, fp);
+	if (pagesize == writesize) {
+		return pagesize;
+	} else {
+		return -1;
+	}
 }
 
 void revorb_fclose(REVORB_FILE* fp) {
@@ -167,21 +171,24 @@ REVORB_RESULT copy_headers(REVORB_FILE* fi,
 
 	vorbis_comment_clear(&vc);
 
+	int headersize = 0;
 	while (ogg_stream_flush(os, &page)) {
-		if (revorb_fwrite(page.header, 1, page.header_len, fo) != page.header_len ||
-			revorb_fwrite(page.body, 1, page.body_len, fo) != page.body_len) {
+		int pagesize = revorb_fwritepage(page, fo);
+		if (pagesize > -1) {
+			headersize += pagesize;
+			continue;
+		} else {
 			ogg_stream_clear(is);
 			ogg_stream_clear(os);
 			return REVORB_ERR_HEADER_WRITE;
 		}
 	}
 
-	return REVORB_ERR_SUCCESS;
+	return headersize;
 }
 
-REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo, ReAllocHGlobal reAlloc) {
-	int g_failed;
-	netrealloc = reAlloc;
+REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo) {
+	int g_failed = 0, g_outsize = 0;
 
 	ogg_sync_state sync_in, sync_out;
 	ogg_sync_init(&sync_in);
@@ -197,7 +204,8 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo, ReAllocHGlobal 
 	REVORB_RESULT code =
 		copy_headers(fi, &sync_in, &stream_in, fo, &sync_out, &stream_out, &vi);
 
-	if (code == REVORB_ERR_SUCCESS) {
+	if (code > REVORB_ERR_HEADER_WRITE) {
+		g_outsize += code;
 		ogg_int64_t granpos = 0, packetnum = 0;
 		int lastbs = 0;
 
@@ -251,10 +259,10 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo, ReAllocHGlobal 
 
 							ogg_page opage;
 							while (ogg_stream_pageout(&stream_out, &opage)) {
-								if (revorb_fwrite(opage.header, 1, opage.header_len, fo) !=
-									opage.header_len ||
-									revorb_fwrite(opage.body, 1, opage.body_len, fo) !=
-									opage.body_len) {
+								int pagesize = revorb_fwritepage(opage, fo);
+								if (pagesize > -1) {
+									g_outsize += pagesize;
+								} else {
 									code = REVORB_ERR_WRITE_FAIL;
 									eos = 2;
 									g_failed = 1;
@@ -266,26 +274,24 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo, ReAllocHGlobal 
 				}
 			}
 
-			if (eos == 2)
-				break;
+			if (eos == 2) break;
 
-			{
-				packet.e_o_s = 1;
-				ogg_stream_packetin(&stream_out, &packet);
-				ogg_page opage;
-				while (ogg_stream_flush(&stream_out, &opage)) {
-					if (revorb_fwrite(opage.header, 1, opage.header_len, fo) !=
-						opage.header_len ||
-						revorb_fwrite(opage.body, 1, opage.body_len, fo) !=
-						opage.body_len) {
-						code = REVORB_ERR_WRITE_FAIL2;
-						g_failed = 1;
-						break;
-					}
+			packet.e_o_s = 1;
+			ogg_stream_packetin(&stream_out, &packet);
+			ogg_page opage;
+			while (ogg_stream_flush(&stream_out, &opage)) {
+				int pagesize = revorb_fwritepage(opage, fo);
+				if (pagesize > -1) {
+					g_outsize += pagesize;
+					ogg_stream_clear(&stream_in);
+				} else {
+					code = REVORB_ERR_WRITE_FAIL2;
+					g_failed = 1;
+					break;
 				}
-				ogg_stream_clear(&stream_in);
-				break;
 			}
+			ogg_stream_clear(&stream_in);
+			break;
 		}
 
 		ogg_stream_clear(&stream_out);
@@ -298,5 +304,9 @@ REVORBAPI REVORB_RESULT revorb(REVORB_FILE* fi, REVORB_FILE* fo, ReAllocHGlobal 
 	ogg_sync_clear(&sync_in);
 	ogg_sync_clear(&sync_out);
 
-	return code;
+	if (!g_failed) {
+		return g_outsize;
+	} else {
+		return code;
+	}
 }
